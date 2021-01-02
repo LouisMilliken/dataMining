@@ -26,6 +26,7 @@ ratings_mat_file = './data/ratings_mat.csv'
 centered_mat_file = './data/centered_mat.csv'
 sim_mat_file = './data/similarity_mat.csv'
 neighbourhood_file = './data/neighbourhoods.csv'
+collab_predictions_file = './data/collab_predictions.csv'
 collab_ratings_file = './data/collab_ratings.csv'
 # Read the data using pandas
 print("loading files...")
@@ -37,8 +38,10 @@ ratings_mat_description = pd.read_csv(ratings_mat_file, delimiter = ',')        
 centered_mat_description = pd.read_csv(centered_mat_file, delimiter = ',')      #MOVIES ARE THE COLUMNS
 sim_mat_description = pd.read_csv(sim_mat_file, delimiter = ',')
 neighbourhood_description = pd.read_csv(neighbourhood_file, delimiter = '!', squeeze = 'true')
-final_predictions = pd.read_csv(submission_file, delimiter=';', names=['userID', 'movieID'], header=None)
-collab_ratings_description = pd.read_csv(collab_ratings_file, delimiter = ',')
+final_predictions = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
+collab_predictions_description = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
+collab_ratings_description = pd.read_csv(collab_ratings_file, delimiter = ',', header=None)
+
 def valid(row, i):
     try:
         return row[0].split(",")
@@ -79,6 +82,16 @@ def write_vector(vec, name):
         vec = '\n'.join(vec)
         vec_writer.write(vec)
 
+def write_predictions(predictions, name):
+    print("writing ", name)
+    with open(name, 'w') as submission_writer:
+        #Formates data
+        predictions = [map(str, row) for row in predictions]
+        predictions = [','.join(row) for row in predictions]
+        predictions = 'Id,Rating\n'+'\n'.join(predictions)
+    
+        #Writes it down
+        submission_writer.write(predictions)
 
 def create_centered_mat(ratings):
     ratings = ratings.values
@@ -111,13 +124,16 @@ def cosineSim(a, b):
         return 0
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
+def calculate_similarity(a, b):
+    return cosineSim(a, b)
+
 def create_similarities(mat):
     sim_mat = np.ones((mat.shape[1], mat.shape[1]))
     mat = mat.values.T
 
     for i, row in enumerate(mat):
         for j in range(i + 1, len(mat)):
-            sim = cosineSim(mat[i], mat[j])
+            sim = calculate_similarity(mat[i], mat[j])
             sim_mat[i][j] = sim
             sim_mat[j][i] = sim
 
@@ -196,45 +212,114 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
     return finalPredictions
 
 def apply_predictions(ratings, predictions, actual_predictions):
-    new_ratings = ratings
+    new_ratings = np.zeros((ratings.shape[0] + 1, ratings.shape[1] + 1))
     predictions = predictions.values
     actual_predictions = actual_predictions.values
     for i, prediction in enumerate(predictions):
         user = prediction[0]
         movie = prediction[1]
         val =  actual_predictions[i][1]
-        new_ratings[user - 1][movie - 1] = float(val)
-        
+        new_ratings[user][movie] = float(val)
+
+    for i in range(1, ratings.shape[0]):
+        for j in range(1, ratings.shape[1]):
+            if ratings[i - 1][j] != 0 and new_ratings[i][j] == 0:
+                new_ratings[i][j] = ratings[i - 1][j]
+                
+                
     return new_ratings
 
-predictions = predict_collaborative_filtering(movies_description, users_description, ratings_mat_description, predictions_description)
-ratings = ratings_mat_description.values
-print(ratings[0].sum())
-ratings = apply_predictions(ratings, predictions_description, final_predictions)
-write_mat(ratings, collab_ratings_file)
+# predictions = predict_collaborative_filtering(movies_description, users_description, ratings_mat_description, predictions_description)
+# write_predictions(predictions, collab_predictions_file)
+
+# ratings = ratings_mat_description.values
+# print(ratings[:0].sum())
+# print(collab_predictions_description.values[1][1])
+# newRatings = apply_predictions(ratings, predictions_description, collab_predictions_description)
+# write_mat(newRatings, collab_ratings_file)
+
 #####
 ##
 ## LATENT FACTORS
 ##
 #####
+
+def create_gender_averages(users, ratings):
+
+    #Create an empty matrix which will be filled with the columns: movieId, AvgMaleRating and AvgFemaleRating
+    genderAverageMatrix = np.zeros(ratings.shape[1], 3)
+
+    for movieId, movie in enumerate(ratings.T, 1):
+        totalMaleRating = 0
+        totalFemaleRating = 0
+        totalRatings = 0
+
+        for userId, movieRating in enumerate(movie, 1):
+            if movieRating != 0:
+                if users[userId][1] == "M":
+                    totalMaleRating += movieRating
+                else:
+                    totalFemaleRating += totalFemaleRating
+                totalRatings += 1
+
+        #Set current movieId row
+        genderAverageMatrix[movieId - 1] = (movieId, totalMaleRating / totalRatings, totalFemaleRating / totalRatings )
+
+    return genderAverageMatrix
+
+def find_age_group(userAge):
+
+    base = int(userAge / 10)
+    return base * 10
+
+
+def create_age_group_averages(users, ratings):
+
+    #Create an empty matrix which will be filled with a column containing the movieId and 10 colums corresponding to the amount of age groups we set
+    ageGroupAverageMatrix = np.zeros(ratings.shape[1], 11)
+
+    for movieId, movie in enumerate(ratings.T, 1):
+        totalRatings = 0
+
+        for userId, movieRating in enumerate(movie, 1):
+            if movieRating != 0:
+                ageGroup = find_age_group(users[userId][2])
+                ageGroupAverageMatrix[movieId - 1][ageGroup] += movieRating
+                totalRatings += 1
+        
+        ageGroupAverageMatrix[movieId - 1] = ageGroupAverageMatrix[movieId - 1] / totalRatings
+
+    
+    return ageGroupAverageMatrix
+
+
+    
+
+
+
+
+
     
 def predict_latent_factors(ratings, predictions):
 
     predictions = predictions.values
 
-    Q, S, Vt = np.linalg.svd(ratings.values)
+    print(ratings.values.shape)
 
-    Sigma = np.zeros(len(S), len(S))
+    Q, S, Vt = np.linalg.svd(ratings.values, full_matrices=False)
+
+    Sigma = np.zeros((len(S), len(S)))
     for i, s in enumerate(S):
         Sigma[i,i] = s
 
-    Pt = np.dot(Sigma, Vt)
-    
+    Pt = np.matmul(Sigma, Vt)
+    reconstructed = np.matmul(Q, Pt)
+    write_mat(Pt, "./data/recon.csv")
     Submission = np.zeros((len(predictions), 2))
     for i, p in enumerate(predictions):
       Submission[i,0] = i + 1
       Submission[i,1] = np.dot(Q[p[0]], Pt[p[1]])
-
+    
     return Submission
     ## TO COMPLETE    
     
@@ -286,12 +371,4 @@ def create_ratings_mat(movies, users, ratings):
 #Save predictions, should be in the form 'list of tuples' or 'list of lists'
 # predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
 
-
-with open(submission_file, 'w') as submission_writer:
-    #Formates data
-    predictions = [map(str, row) for row in predictions]
-    predictions = [','.join(row) for row in predictions]
-    predictions = 'Id,Rating\n'+'\n'.join(predictions)
-    
-    #Writes it dowmn
-    submission_writer.write(predictions)
+write_predictions(predictions, submission_file)
