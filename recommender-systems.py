@@ -26,6 +26,7 @@ ratings_mat_file = './data/ratings_mat.csv'
 centered_mat_file = './data/centered_mat.csv'
 sim_mat_file = './data/similarity_mat.csv'
 neighbourhood_file = './data/neighbourhoods.csv'
+collab_ratings_file = './data/collab_ratings.csv'
 # Read the data using pandas
 print("loading files...")
 movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID':'int', 'year':'int', 'movie':'str'}, names=['movieID', 'year', 'movie'])
@@ -36,7 +37,8 @@ ratings_mat_description = pd.read_csv(ratings_mat_file, delimiter = ',')        
 centered_mat_description = pd.read_csv(centered_mat_file, delimiter = ',')      #MOVIES ARE THE COLUMNS
 sim_mat_description = pd.read_csv(sim_mat_file, delimiter = ',')
 neighbourhood_description = pd.read_csv(neighbourhood_file, delimiter = '!', squeeze = 'true')
-
+final_predictions = pd.read_csv(submission_file, delimiter=';', names=['userID', 'movieID'], header=None)
+collab_ratings_description = pd.read_csv(collab_ratings_file, delimiter = ',')
 def valid(row, i):
     try:
         return row[0].split(",")
@@ -64,6 +66,7 @@ global_avg = 3.58131489029763
 
 def write_mat(mat, name):
 
+    print("writing ", name)
     with open(name, 'w') as mat_writer:
         mat = [map(str, row) for row in mat]
         mat = [','.join(row) for row in mat]
@@ -71,6 +74,7 @@ def write_mat(mat, name):
         mat_writer.write(mat)
     
 def write_vector(vec, name):
+    print("writing ", name)
     with open(name, 'w') as vec_writer:
         vec = '\n'.join(vec)
         vec_writer.write(vec)
@@ -120,22 +124,37 @@ def create_similarities(mat):
     write_mat(sim_mat, sim_mat_file)
 
 def create_neighbourhood(mat, threshold):
-    neighbourhood = np.empty(mat.shape[0], dtype=object)
+    neighbourhood = np.empty(mat.shape[0] + 1, dtype=object)
+    neighbourhood[0] = "!"
+    print(len(neighbourhood))
     mat = mat.values
-    for i, row in enumerate(mat, ):
+    for i, row in enumerate(mat):
         list = ""
         for j, val in enumerate(row):
-            
+            val = float(val)
             if val > threshold and val < 1:
                 list = list + str(j) + ","
-
-        neighbourhood[i] = list[:-1] + "!"
+        if len(list) == 0:
+            list += ","
+        neighbourhood[i + 1] = list[:-1] + "!"
 
     write_vector(neighbourhood, neighbourhood_file)
 
 #create_similarities(centered_mat_description)
-#create_neighbourhood(sim_mat_description, 0)
+# print("creating neighbourhood")
+# create_neighbourhood(sim_mat_description, 0.0)
+# print("done")
 
+def check_similarities(neighbours, movieIndex, similarites):
+
+    similarites = similarites.values
+
+    row = neighbours[movieIndex - 1]
+    for neighbour in row:
+        val = similarites[int(neighbour) - 1][movieIndex]
+        print("neighbour: ", str(neighbour), " sim: ", val)
+
+# check_similarities(neighbourhood_description, 1, sim_mat_description)
 
 
 def predict_with_neighbours(user, movie, neighbours, ratings, similarities):
@@ -145,19 +164,19 @@ def predict_with_neighbours(user, movie, neighbours, ratings, similarities):
     ratings = ratings.values
 
     totalSim = 0
-    for neighbour in neighbours[movie]:
-        neighbour = int(neighbour)
+    for neighbour in neighbours[movie - 1]:
+        neighbour = int(neighbour) - 1
         if ratings[user][neighbour] != 0:
-            totalSim += similarities[movie][neighbour]
+            totalSim += similarities[neighbour][movie]
     
     if totalSim == 0:
         return global_avg
 
     finalRating = 0
-    for neighbour in neighbours[movie]:
-        neighbour = int(neighbour)
+    for neighbour in neighbours[movie - 1]:
+        neighbour = int(neighbour) - 1
         rating = ratings[user][neighbour]
-        sim = similarities[movie][neighbour]
+        sim = similarities[neighbour][movie]
         if rating != 0:
             finalRating += rating * sim / totalSim
     
@@ -177,46 +196,49 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
     return finalPredictions
 
 def apply_predictions(ratings, predictions, actual_predictions):
-    new_ratings = ratings.values
+    new_ratings = ratings
     predictions = predictions.values
-
+    actual_predictions = actual_predictions.values
     for i, prediction in enumerate(predictions):
         user = prediction[0]
         movie = prediction[1]
-        new_ratings[user, movie] = actual_predictions[i]
+        val =  actual_predictions[i][1]
+        new_ratings[user - 1][movie - 1] = float(val)
+        
     return new_ratings
 
 predictions = predict_collaborative_filtering(movies_description, users_description, ratings_mat_description, predictions_description)
+ratings = ratings_mat_description.values
+print(ratings[0].sum())
+ratings = apply_predictions(ratings, predictions_description, final_predictions)
+write_mat(ratings, collab_ratings_file)
 #####
 ##
 ## LATENT FACTORS
 ##
 #####
     
-def predict_latent_factors(movies, users, ratings, predictions):
-    # mat = predict_collaborative_filtering(movies, users, ratings, predictions)
+def predict_latent_factors(ratings, predictions):
 
-    # Q, S, Vt = np.linalg.svd(mat)
+    predictions = predictions.values
 
-    # Sigma = np.zeros(len(S), len(S))
-    # for i, s in enumerate(S):
-    #     Sigma[i,i] = s
+    Q, S, Vt = np.linalg.svd(ratings.values)
 
-    # Pt = np.dot(Sigma, Vt)
-    
-    # Submission = np.zeros((len(predictions), 2))
-    # for i, p in enumerate(predictions):
-    #   Submission[i,0] = i
-    #   Submission[i,1] = np.dot(Q[p.userID], Pt[p.movieID])
+    Sigma = np.zeros(len(S), len(S))
+    for i, s in enumerate(S):
+        Sigma[i,i] = s
 
-    # return Submission
+    Pt = np.dot(Sigma, Vt)
     
-    
-    ## TO COMPLETE
+    Submission = np.zeros((len(predictions), 2))
+    for i, p in enumerate(predictions):
+      Submission[i,0] = i + 1
+      Submission[i,1] = np.dot(Q[p[0]], Pt[p[1]])
 
-    pass
+    return Submission
+    ## TO COMPLETE    
     
-    
+predictions = predict_latent_factors(collab_ratings_description, predictions_description)
 #####
 ##
 ## FINAL PREDICTORS
@@ -262,6 +284,9 @@ def create_ratings_mat(movies, users, ratings):
 ##
 ##### 
 #Save predictions, should be in the form 'list of tuples' or 'list of lists'
+# predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
+
+
 with open(submission_file, 'w') as submission_writer:
     #Formates data
     predictions = [map(str, row) for row in predictions]
