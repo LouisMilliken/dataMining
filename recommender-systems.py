@@ -1,3 +1,5 @@
+from os import write
+from typing import ValuesView
 import numpy as np
 import pandas as pd
 import os.path
@@ -28,6 +30,8 @@ sim_mat_file = './data/similarity_mat.csv'
 neighbourhood_file = './data/neighbourhoods.csv'
 collab_predictions_file = './data/collab_predictions.csv'
 collab_ratings_file = './data/collab_ratings.csv'
+latent_ratings_file = "./data/latent_ratings.csv"
+factorized_ratings_file = "./data/factorized_ratings.csv"
 # Read the data using pandas
 print("loading files...")
 movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID':'int', 'year':'int', 'movie':'str'}, names=['movieID', 'year', 'movie'])
@@ -41,7 +45,7 @@ neighbourhood_description = pd.read_csv(neighbourhood_file, delimiter = '!', squ
 final_predictions = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
 collab_predictions_description = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
 collab_ratings_description = pd.read_csv(collab_ratings_file, delimiter = ',', header=None)
-
+latent_ratings_description = pd.read_csv(latent_ratings_file, delimiter = ',', header=None)
 def valid(row, i):
     try:
         return row[0].split(",")
@@ -306,22 +310,90 @@ def predict_latent_factors(ratings, predictions):
         Sigma[i,i] = s
 
     Pt = np.matmul(Sigma, Vt)
-    # reconstructed = np.matmul(Q, Pt)
-    # write_mat(reconstructed, "./data/recon.csv")
+    reconstructed = latent_ratings_description.values
     Submission = np.zeros((len(predictions), 2))
     for i, p in enumerate(predictions):
-      Submission[i,0] = i + 1
-      Submission[i,1] = np.dot(Q[p[0]], Pt[p[1]])
+      Submission[i,0] = int(i + 1)
+      Submission[i,1] = reconstructed[p[0]][p[1]]
     
     return Submission
     ## TO COMPLETE    
     
-predictions = predict_latent_factors(collab_ratings_description, predictions_description)
-#####
-##
-## FINAL PREDICTORS
-##
-#####
+
+def factorize(ratings, P, Q, numFeatures, errorMeasure = 0.001 ,iterations = 100, lr = 0.002, regularization = 0.2):
+    
+    Q = Q.T
+    
+    # Each step we try to find a more optimal P and Q by updating row by row from the ratings matrix
+    for step in range(iterations):
+        for i in range(len(ratings[0])):
+            for j in range(len(ratings)):
+
+                # If there is a rating try to approach it
+                if ratings[j][i] > 0:
+                    
+                    # Calculate the current error at this particular rating
+                    error = ratings[j][i] - np.dot(P[j,:], Q[:,i])
+
+                    
+                    for feature in range(numFeatures):
+                        pGrad = (2 * error * Q[feature][i]) - (regularization * P[j][feature])
+                        qGrad = (2 * error * P[j][feature]) - (regularization * Q[feature][i])
+
+                        P[j][feature] += lr * pGrad
+                        Q[feature][i] += lr * qGrad
+        
+        
+        # Using matmul create the new ratings matrix and intilize its error to 0
+        newR = np.matmul(P, Q)
+        error = 0
+
+
+        # Calculate the error rating using root mean square error
+        for i in range(len(ratings[0])):
+            for j in range(len(ratings)):
+
+                # Only calculate if the rating is non zero
+                if ratings[j][i] > 0:
+                    error += pow(ratings[j][i] - np.dot(P[j,:], Q[:,i]), 2)
+                    
+                    for feature in range(numFeatures):
+                        e+= (regularization / 2) * pow(P[j][feature], 2) + pow(Q[feature][i], 2)
+
+        # Stop optimizing the matrices P and Q if the error is below a certain threshold                
+        if error < errorMeasure:
+            break
+
+    return P, Q.T
+
+def predict_with_factorize(ratings, numFeatures, predictions):
+    
+    shape = ratings.shape
+
+    # Initialize the defactorized matrices P and Q with ones
+    P = np.ones((shape[0] + 1, numFeatures))
+    Q = np.ones((shape[1] + 1, numFeatures))
+
+    # Using gradient descent calculate the optimal matrices P and Q
+    P, Q = factorize(ratings, P, Q, numFeatures)
+
+    # Create and write the new ratings matrix using the factorized matrices P and Q 
+    factorized_ratings = np.matmul(P, Q.T)
+    write_mat(factorized_ratings, factorized_ratings_file)
+
+    # Create empty submission matrix to fill with predicted ratings
+    Submission = np.zeros((len(predictions), 2))
+    
+    # Loop over the predictions and get the new ratings from the factorized ratings matrix
+    for i, p in enumerate(predictions):
+        Submission[i,0] = int(i + 1)
+        Submission[i,1] = factorized_ratings[p[0]][p[1]]
+
+    return Submission
+    
+
+prediction = predict_with_factorize(collab_ratings_description.values, 1000, predictions_description.values)
+
 
 def predict_final(movies, users, ratings, predictions):
   ## TO COMPLETE
@@ -363,5 +435,4 @@ def create_ratings_mat(movies, users, ratings):
 ##### 
 #Save predictions, should be in the form 'list of tuples' or 'list of lists'
 # predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
-
-write_predictions(predictions, submission_file)
+write_predictions(predictions, './data/submission.csv')
