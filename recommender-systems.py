@@ -292,13 +292,6 @@ def create_age_group_averages(users, ratings):
     
     return ageGroupAverageMatrix
 
-
-    
-
-
-
-
-
     
 def predict_latent_factors(ratings, predictions):
 
@@ -313,8 +306,8 @@ def predict_latent_factors(ratings, predictions):
         Sigma[i,i] = s
 
     Pt = np.matmul(Sigma, Vt)
-    reconstructed = np.matmul(Q, Pt)
-    write_mat(Pt, "./data/recon.csv")
+    # reconstructed = np.matmul(Q, Pt)
+    # write_mat(reconstructed, "./data/recon.csv")
     Submission = np.zeros((len(predictions), 2))
     for i, p in enumerate(predictions):
       Submission[i,0] = i + 1
