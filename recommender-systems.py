@@ -2,6 +2,7 @@ from os import write
 from typing import ValuesView
 import numpy as np
 import pandas as pd
+from tqdm import tqdm as tqdm
 import os.path
 from random import randint
 
@@ -32,6 +33,8 @@ collab_predictions_file = './data/collab_predictions.csv'
 collab_ratings_file = './data/collab_ratings.csv'
 latent_ratings_file = "./data/latent_ratings.csv"
 factorized_ratings_file = "./data/factorized_ratings.csv"
+bad_neighbourhood_file = "./data/bad_neighbourhood.csv"
+strict_neighbourhood_file = "./data/strict_neighbourhood.csv"
 # Read the data using pandas
 print("loading files...")
 movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID':'int', 'year':'int', 'movie':'str'}, names=['movieID', 'year', 'movie'])
@@ -42,6 +45,8 @@ ratings_mat_description = pd.read_csv(ratings_mat_file, delimiter = ',')        
 centered_mat_description = pd.read_csv(centered_mat_file, delimiter = ',')      #MOVIES ARE THE COLUMNS
 sim_mat_description = pd.read_csv(sim_mat_file, delimiter = ',')
 neighbourhood_description = pd.read_csv(neighbourhood_file, delimiter = '!', squeeze = 'true')
+bad_neighbourhood_description = pd.read_csv(bad_neighbourhood_file, delimiter = '!', squeeze = 'true')
+strict_neighbourhood_description = pd.read_csv(strict_neighbourhood_file, delimiter = ',')
 final_predictions = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
 collab_predictions_description = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
 collab_ratings_description = pd.read_csv(collab_ratings_file, delimiter = ',', header=None)
@@ -62,7 +67,18 @@ def unzip_neighbourhood():
         neighbourhood[i] = neighbours
     return neighbourhood
 
+
+def unzip_bad_neighbourhood():
+    neighbourhood = np.empty(bad_neighbourhood_description.shape[0], dtype=object)
+    nd = bad_neighbourhood_description.values
+    for i, row in enumerate(nd):
+        
+        neighbours = valid(row, i)
+        neighbourhood[i] = neighbours
+    return neighbourhood
+
 neighbourhood_description = unzip_neighbourhood()
+bad_neighbourhood_description = unzip_bad_neighbourhood()
 print("done")
 global_avg = 3.58131489029763
 #####
@@ -97,8 +113,8 @@ def write_predictions(predictions, name):
         #Writes it down
         submission_writer.write(predictions)
 
-def create_centered_mat(ratings):
-    ratings = ratings.values
+def create_centered_movies_mat(ratings):
+    ratings = ratings.values.T
     centered_mat = np.zeros((ratings.shape[0] + 1, ratings.shape[1] + 1))
     totalSum = 0
     totalNum = 0
@@ -119,9 +135,34 @@ def create_centered_mat(ratings):
                 break
             if float(val) > 0.0:
                 centered_mat[y + 1][x] = int(val) - avg
-    write_mat(centered_mat, centered_mat_file)
+    write_mat(centered_mat.T, centered_mat_file)
 
 #create_centered_mat(ratings_mat_description)
+
+
+def create_centered_users_mat(ratings):
+    ratings = ratings.values
+    centered_mat = np.zeros((ratings.shape[0] + 1, ratings.shape[1] + 1))
+    for y, row in enumerate(ratings):
+        sum = 0
+        num = 0
+        len = row.size
+        for val in row:
+            if float(val) > 0:
+                sum += float(val)
+                num += 1
+
+        avg = sum / num
+        #print(avg)
+        for x, val in enumerate(row):
+            if x >= len:
+                break
+            if float(val) > 0.0:
+                centered_mat[y + 1][x] = int(val) - avg
+    write_mat(centered_mat, centered_mat_file)
+
+# def pearsonSimAge(userIdA, userIdB, ratings):
+
 
 def cosineSim(a, b):
     if a.sum() == 0 or b.sum() == 0:
@@ -145,8 +186,7 @@ def create_similarities(mat):
 
 def create_neighbourhood(mat, threshold):
     neighbourhood = np.empty(mat.shape[0] + 1, dtype=object)
-    neighbourhood[0] = "!"
-    print(len(neighbourhood))
+    neighbourhood[0] = ""
     mat = mat.values
     for i, row in enumerate(mat):
         list = ""
@@ -160,10 +200,45 @@ def create_neighbourhood(mat, threshold):
 
     write_vector(neighbourhood, neighbourhood_file)
 
+def create_strict_neighbourhood(mat, size):
+    neighbourhood = np.zeros((mat.shape[0] + 1, size))
+
+    print(len(neighbourhood))
+    mat = mat.values
+    for i, row in enumerate(mat):
+        row = np.argsort(row[1:3707])
+        row = row[-(size + 1):-1]
+        neighbourhood[i] = row
+        
+    write_mat(neighbourhood, strict_neighbourhood_file)
+
+
+def create_bad_neighbourhood(mat, threshold = -1):
+    neighbourhood = np.empty(mat.shape[0] + 1, dtype=object)
+    neighbourhood[0] = "!"
+    print(len(neighbourhood))
+    mat = mat.values
+    for i, row in enumerate(mat):
+        list = ""
+        for j, val in enumerate(row):
+            val = float(val)
+            if threshold > val and val < 0:
+                list = list + str(j) + ","
+        if len(list) == 0:
+            list += ","
+        neighbourhood[i + 1] = list[:-1] + "!"
+
+    write_vector(neighbourhood, bad_neighbourhood_file)
+
 #create_similarities(centered_mat_description)
-# print("creating neighbourhood")
-# create_neighbourhood(sim_mat_description, 0.0)
+# print("creating strict neighbourhood")
+# create_strict_neighbourhood(sim_mat_description, 300)
 # print("done")
+
+# print("creating bad neighbourhood")
+# create_bad_neighbourhood(sim_mat_description, 100)
+# print("done")
+
 
 def check_similarities(neighbours, movieIndex, similarites):
 
@@ -182,7 +257,6 @@ def predict_with_neighbours(user, movie, neighbours, ratings, similarities):
 
     similarities = similarities.values
     ratings = ratings.values
-
     totalSim = 0
     for neighbour in neighbours[movie - 1]:
         neighbour = int(neighbour) - 1
@@ -202,8 +276,35 @@ def predict_with_neighbours(user, movie, neighbours, ratings, similarities):
     
     return finalRating
     
+def predict_with_both_neighbours(user, movie, neighbours, ratings, similarities):
 
-def predict_collaborative_filtering(movies, users, ratings, predictions):
+    similarities = similarities.values
+    ratings = ratings.values
+
+    totalSim = 0
+    for neighbour in neighbours[movie - 1]:
+        neighbour = int(neighbour) - 1
+        if ratings[user][neighbour] != 0:
+            totalSim += np.absolute(similarities[neighbour][movie])
+    
+    if totalSim == 0:
+        return global_avg
+
+    finalRating = 0
+    for neighbour in neighbours[movie - 1]:
+        neighbour = int(neighbour) - 1
+        rating = ratings[user][neighbour]
+        sim = similarities[neighbour][movie]
+        if sim > 0 and rating != 0:
+            finalRating += rating * sim / totalSim
+        if sim < 0 and rating != 0:
+            rating = 6 - rating   #if rating = 1, new rating = 6 - 1 = 5
+            sim = np.absolute(sim)   #if sim = -1, new sim = 1
+            finalRating += rating * sim / totalSim
+    
+    return finalRating
+
+def predict_collaborative_filtering(movies, users, ratings, predictions, sim_mat, neighbourhood):
     # TO COMPLETE
     predictions = predictions.values
     finalPredictions = np.empty((len(predictions), 2))
@@ -211,7 +312,7 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
         user = prediction[0]
         movie = prediction[1]
         finalPredictions[i][0] = i + 1
-        finalPredictions[i][1] = predict_with_neighbours(user - 1, movie - 1, neighbourhood_description, ratings, sim_mat_description)
+        finalPredictions[i][1] = predict_with_both_neighbours(user - 1, movie - 1, neighbourhood, ratings, sim_mat)
     
     return finalPredictions
 
@@ -233,8 +334,8 @@ def apply_predictions(ratings, predictions, actual_predictions):
                 
     return new_ratings
 
-# predictions = predict_collaborative_filtering(movies_description, users_description, ratings_mat_description, predictions_description)
-# write_predictions(predictions, collab_predictions_file)
+predictions = predict_collaborative_filtering(movies_description, users_description, ratings_mat_description, predictions_description,
+ sim_mat_description, bad_neighbourhood_description)
 
 # ratings = ratings_mat_description.values
 # print(ratings[:0].sum())
@@ -323,22 +424,39 @@ def predict_latent_factors(ratings, predictions):
 def factorize(ratings, P, Q, numFeatures, errorMeasure = 0.001 ,iterations = 100, lr = 0.002, regularization = 0.2):
     
     Q = Q.T
-    
     # Each step we try to find a more optimal P and Q by updating row by row from the ratings matrix
     for step in range(iterations):
-        for i in range(len(ratings[0])):
+        if step % (100 / iterations) == 0:
+            print(step, "/", (iterations))
+        num = len(ratings[0])
+        for i in range(num):
+            if i % (100 / num) == 0:
+                print(step, "/", (num))
             for j in range(len(ratings)):
 
                 # If there is a rating try to approach it
                 if ratings[j][i] > 0:
                     
                     # Calculate the current error at this particular rating
-                    error = ratings[j][i] - np.dot(P[j,:], Q[:,i])
+                    error = ratings[j][i] - np.matmul(P[j,:], Q[:,i])
+                    # print("---")
+                    # print(ratings[j][i], " - ", np.matmul(P[j,:], Q[:,i]))
 
-                    
+                    error = error * 2
+
+                    # print(error)
+                    #print("---")
+
                     for feature in range(numFeatures):
-                        pGrad = (2 * error * Q[feature][i]) - (regularization * P[j][feature])
-                        qGrad = (2 * error * P[j][feature]) - (regularization * Q[feature][i])
+
+                        pReg = regularization * P[j][feature]
+                        qReg = regularization * Q[feature][i]
+                        
+                        qErr = error * Q[feature][i]
+                        pErr = error * P[j][feature]
+
+                        pGrad = (pErr) - (pReg)
+                        qGrad = (qErr) - (qReg)
 
                         P[j][feature] += lr * pGrad
                         Q[feature][i] += lr * qGrad
@@ -358,7 +476,7 @@ def factorize(ratings, P, Q, numFeatures, errorMeasure = 0.001 ,iterations = 100
                     error += pow(ratings[j][i] - np.dot(P[j,:], Q[:,i]), 2)
                     
                     for feature in range(numFeatures):
-                        e+= (regularization / 2) * pow(P[j][feature], 2) + pow(Q[feature][i], 2)
+                        error+= (regularization / 2) * pow(P[j][feature], 2) + pow(Q[feature][i], 2)
 
         # Stop optimizing the matrices P and Q if the error is below a certain threshold                
         if error < errorMeasure:
@@ -371,11 +489,11 @@ def predict_with_factorize(ratings, numFeatures, predictions):
     shape = ratings.shape
 
     # Initialize the defactorized matrices P and Q with ones
-    P = np.ones((shape[0] + 1, numFeatures))
-    Q = np.ones((shape[1] + 1, numFeatures))
+    P = np.random.rand(shape[0] + 1, numFeatures)
+    Q = np.random.rand(shape[1] + 1, numFeatures)
 
     # Using gradient descent calculate the optimal matrices P and Q
-    P, Q = factorize(ratings, P, Q, numFeatures)
+    P, Q = factorize(ratings, P, Q, numFeatures, iterations = 10)
 
     # Create and write the new ratings matrix using the factorized matrices P and Q 
     factorized_ratings = np.matmul(P, Q.T)
@@ -392,31 +510,25 @@ def predict_with_factorize(ratings, numFeatures, predictions):
     return Submission
     
 
-prediction = predict_with_factorize(collab_ratings_description.values, 1000, predictions_description.values)
+# predictions = predict_with_factorize(collab_ratings_description.values, 2, predictions_description.values)
 
 
 def predict_final(movies, users, ratings, predictions):
   ## TO COMPLETE
 
   pass
-
-
-#####
-##
-## RANDOM PREDICTORS
-## //!!\\ TO CHANGE
-##
-#####
     
 #By default, predicted rate is a random classifier
 def predict_random(movies, users, ratings, predictions):
     number_predictions = len(predictions)
 
     return [[idx, randint(1, 5)] for idx in range(1, number_predictions + 1)]
-
-
-
    
+def predict_average(predictions):
+    number_predictions = len(predictions)
+
+    return [[idx, global_avg] for idx in range(1, number_predictions + 1)]
+
 def create_ratings_mat(movies, users, ratings):
     ratings_mat = np.zeros((len(users) + 1, len(movies) + 1))
     for i, row in enumerate(ratings.T.iteritems()):
@@ -434,5 +546,9 @@ def create_ratings_mat(movies, users, ratings):
 ##
 ##### 
 #Save predictions, should be in the form 'list of tuples' or 'list of lists'
-# predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
-write_predictions(predictions, './data/submission.csv')
+predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
+write_predictions(predictions, './data/predict_random.csv')
+
+predictions = predict_average(predictions_description)
+write_predictions(predictions, './data/predict_average.csv')
+
