@@ -32,6 +32,20 @@ collab_predictions_file = './data/collab_predictions.csv'
 collab_ratings_file = './data/collab_ratings.csv'
 latent_ratings_file = "./data/latent_ratings.csv"
 factorized_ratings_file = "./data/factorized_ratings.csv"
+centered_user_mat_file = "./data/centered_user_mat.csv"
+user_avg_mat_file = "./data/user_avg_mat.csv"
+pearson_sim_age_mat_file = "./data/pearson_sim_age_mat.csv"
+pearson_sim_sex_age_mat_file = "./data/pearson_sim_sex_age_mat.csv"
+pearson_neighbourhood_file = './data/pearson_neighbourhoods.csv'
+pearson_sex_age_neighbourhood_file = './data/pearson_sex_age_neighbourhoods.csv'
+pearson_age_predictions_file = './data/pearson_age_predictions.csv'
+pearson_sex_age_predictions_file = './data/pearson_sex_age_predictions.csv'
+cosine_sim_age_mat_file = "./data/cosine_sim_age_mat.csv"
+cosine_sim_sex_age_mat_file = "./data/cosine_sim_sex_age_mat.csv"
+cosine_age_neighbourhood_file = './data/cosine_age_neighbourhood.csv'
+cosine_sex_age_neighbourhood_file = './data/cosine_sex_age_neighbourhood.csv'
+cosine_age_predictions_file = './data/cosine_age_predictions.csv'
+cosine_sex_age_predictions_file = './data/cosine_sex_age_predictions.csv'
 # Read the data using pandas
 print("loading files...")
 movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID':'int', 'year':'int', 'movie':'str'}, names=['movieID', 'year', 'movie'])
@@ -41,11 +55,31 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 ratings_mat_description = pd.read_csv(ratings_mat_file, delimiter = ',')        #USERS ARE THE ROWS
 centered_mat_description = pd.read_csv(centered_mat_file, delimiter = ',')      #MOVIES ARE THE COLUMNS
 sim_mat_description = pd.read_csv(sim_mat_file, delimiter = ',')
+pearson_age_sim_mat_description = pd.read_csv(pearson_sim_age_mat_file, delimiter = ',')
+pearson_sex_age_sim_mat_description = pd.read_csv(pearson_sim_sex_age_mat_file, delimiter = ',')
+
+centered_user_mat_description = pd.read_csv(centered_user_mat_file, delimiter = ',')
 neighbourhood_description = pd.read_csv(neighbourhood_file, delimiter = '!', squeeze = 'true')
-final_predictions = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
-collab_predictions_description = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
-collab_ratings_description = pd.read_csv(collab_ratings_file, delimiter = ',', header=None)
-latent_ratings_description = pd.read_csv(latent_ratings_file, delimiter = ',', header=None)
+pearson_age_mat_description = pd.read_csv(pearson_sim_age_mat_file, delimiter = ',')
+pearson_sex_age_mat_description = pd.read_csv(pearson_sim_sex_age_mat_file, delimiter = ',')
+pearson_neighbourhood_description = pd.read_csv(pearson_neighbourhood_file, delimiter = '!', squeeze = 'true')
+pearson_sex_age_neighbourhood_description = pd.read_csv(pearson_sex_age_neighbourhood_file, delimiter = '!', squeeze = 'true')
+
+
+cosine_age_sim_mat_description = pd.read_csv(cosine_sim_age_mat_file, delimiter = ',')
+cosine_sex_age_sim_mat_description = pd.read_csv(cosine_sim_sex_age_mat_file, delimiter = ',')
+
+cosine_age_neighbourhood_description = pd.read_csv(cosine_age_neighbourhood_file, delimiter = '!', squeeze = 'true')
+cosine_sex_age_neighbourhood_description = pd.read_csv(cosine_sex_age_neighbourhood_file, delimiter = '!', squeeze = 'true')
+
+cosine_age_predictions_description = pd.read_csv(cosine_age_predictions_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
+cosine_sex_age_predictions_description = pd.read_csv(cosine_sex_age_predictions_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
+
+
+# final_predictions = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
+# collab_predictions_description = pd.read_csv(submission_file, delimiter=',', names=['Id', 'Rating'], skiprows = 1, dtype={'Id':'int', 'Rating':'float64'})
+# collab_ratings_description = pd.read_csv(collab_ratings_file, delimiter = ',', header=None)
+# latent_ratings_description = pd.read_csv(latent_ratings_file, delimiter = ',', header=None)
 def valid(row, i):
     try:
         return row[0].split(",")
@@ -62,7 +96,48 @@ def unzip_neighbourhood():
         neighbourhood[i] = neighbours
     return neighbourhood
 
+def unzip_pearson_neighbourhood():
+    neighbourhood = np.empty(pearson_neighbourhood_description.shape[0], dtype=object)
+    nd = pearson_neighbourhood_description.values
+    for i, row in enumerate(nd):
+        
+        neighbours = valid(row, i)
+        neighbourhood[i] = neighbours
+    return neighbourhood
+
+def unzip_pearson_sex_age_neighbourhood():
+    neighbourhood = np.empty(pearson_sex_age_neighbourhood_description.shape[0], dtype=object)
+    nd = pearson_sex_age_neighbourhood_description.values
+    for i, row in enumerate(nd):
+        
+        neighbours = valid(row, i)
+        neighbourhood[i] = neighbours
+    return neighbourhood
+
+def unzip_cosine_age_neighbourhood():
+    neighbourhood = np.empty(cosine_age_neighbourhood_description.shape[0], dtype=object)
+    nd = cosine_age_neighbourhood_description.values
+    for i, row in enumerate(nd):
+        
+        neighbours = valid(row, i)
+        neighbourhood[i] = neighbours
+    return neighbourhood
+
+def unzip_cosine_sex_age_neighbourhood():
+    neighbourhood = np.empty(cosine_sex_age_neighbourhood_description.shape[0], dtype=object)
+    nd = cosine_sex_age_neighbourhood_description.values
+    for i, row in enumerate(nd):
+        
+        neighbours = valid(row, i)
+        neighbourhood[i] = neighbours
+    return neighbourhood
+
 neighbourhood_description = unzip_neighbourhood()
+pearson_neighbourhood_description = unzip_pearson_neighbourhood()
+pearson_sex_age_neighbourhood_description = unzip_pearson_sex_age_neighbourhood()
+
+cosine_age_neighbourhood_description = unzip_cosine_age_neighbourhood()
+cosine_sex_age_neighbourhood_description = unzip_cosine_sex_age_neighbourhood()
 print("done")
 global_avg = 3.58131489029763
 #####
@@ -97,8 +172,8 @@ def write_predictions(predictions, name):
         #Writes it down
         submission_writer.write(predictions)
 
-def create_centered_mat(ratings):
-    ratings = ratings.values
+def create_centered_movie_mat(ratings):
+    ratings = ratings.values.T
     centered_mat = np.zeros((ratings.shape[0] + 1, ratings.shape[1] + 1))
     totalSum = 0
     totalNum = 0
@@ -112,16 +187,49 @@ def create_centered_mat(ratings):
                 num += 1
         totalSum += sum
         totalNum += num
-        avg = sum / num
-        #print(avg)
-        for x, val in enumerate(row):
-            if x >= len:
-                break
-            if float(val) > 0.0:
-                centered_mat[y + 1][x] = int(val) - avg
-    write_mat(centered_mat, centered_mat_file)
+        if num > 0 :
+            avg = sum / num
+            #print(avg)
+            for x, val in enumerate(row):
+                if x >= len:
+                    break
+                if float(val) > 0.0:
+                    centered_mat[y + 1][x] = int(val) - avg
+    print(totalSum/totalNum)
+    write_mat(centered_mat.T, centered_mat_file)
 
-#create_centered_mat(ratings_mat_description)
+def create_centered_user_mat(ratings):
+    ratings = ratings.values
+    centered_mat = np.zeros((ratings.shape[0] + 1, ratings.shape[1] + 1))
+    user_avg_mat = np.zeros((ratings.shape[0] + 1, 2))
+    totalSum = 0
+    totalNum = 0
+    for y, row in enumerate(ratings):
+        sum = 0
+        num = 0
+        len = row.size
+        for val in row:
+            if float(val) > 0:
+                sum += float(val)
+                num += 1
+        totalSum += sum
+        totalNum += num
+        if num > 0 :
+            avg = sum / num
+            user_avg_mat[y+1][0] = y+1
+            user_avg_mat[y+1][1] = avg
+            #print(avg)
+            for x, val in enumerate(row):
+                if x >= len:
+                    break
+                if float(val) > 0.0:
+                    centered_mat[y + 1][x] = int(val) - avg
+    write_mat(centered_mat, centered_user_mat_file)
+    write_mat(user_avg_mat, user_avg_mat_file)
+
+# create_centered_user_mat(ratings_mat_description)
+
+
 
 def cosineSim(a, b):
     if a.sum() == 0 or b.sum() == 0:
@@ -143,7 +251,7 @@ def create_similarities(mat):
 
     write_mat(sim_mat, sim_mat_file)
 
-def create_neighbourhood(mat, threshold):
+def create_neighbourhood(mat, threshold, file):
     neighbourhood = np.empty(mat.shape[0] + 1, dtype=object)
     neighbourhood[0] = "!"
     print(len(neighbourhood))
@@ -153,16 +261,162 @@ def create_neighbourhood(mat, threshold):
         for j, val in enumerate(row):
             val = float(val)
             if val > threshold and val < 1:
-                list = list + str(j) + ","
+                list = list + str(j+1) + ","
         if len(list) == 0:
+            print("empty "  ,str(j))
             list += ","
         neighbourhood[i + 1] = list[:-1] + "!"
 
-    write_vector(neighbourhood, neighbourhood_file)
+    write_vector(neighbourhood, file)
 
-#create_similarities(centered_mat_description)
-# print("creating neighbourhood")
-# create_neighbourhood(sim_mat_description, 0.0)
+
+def create_pearson_age_similarites(mat, users):
+    sim_mat = np.ones((mat.shape[0], mat.shape[0]))
+    mat = mat.values
+    users = users.values
+
+    for i, row in enumerate(mat):
+       
+        sdA = np.std(mat[i])
+        ageA = users[i][2]
+        sexA = users[i][1]
+
+        for j in range(i + 1, len(mat)):
+            sdB = np.std(mat[j])
+            ageB = users[j][2]
+            sexB = users[j][1]
+
+            ageFactor = 1
+            diff = np.absolute(ageA - ageB)
+            if ageA != 1 and ageB != 1 and diff != 0:
+                ageFactor = np.log10(diff + 1)
+
+            sim = 0
+            if sdA != 0 and sdB != 0:
+                dot = np.dot(mat[i], mat[j]) / 6040
+                sim = dot / (sdA * sdB * ageFactor)
+
+            sim_mat[i][j] = sim 
+            sim_mat[j][i] = sim
+
+    write_mat(sim_mat, pearson_sim_age_mat_file)
+
+def create_cosine_age_similarites(mat, users):
+    sim_mat = np.ones((mat.shape[0], mat.shape[0]))
+    mat = mat.values
+    users = users.values
+
+    for i, row in enumerate(mat):
+       
+        ageA = users[i][2]
+
+        for j in range(i + 1, len(mat)):
+            ageB = users[j][2]
+
+            ageFactor = 1
+            diff = np.absolute(ageA - ageB)
+            if ageA != 1 and ageB != 1 and diff != 0:
+                ageFactor = np.log10(diff + 1)
+
+            sim = cosineSim(mat[i], mat[j]) / ageFactor
+            if sim > 1:
+                sim = 1
+            if sim < -1:
+                sim = -1
+
+            sim_mat[i][j] = sim 
+            sim_mat[j][i] = sim
+
+    write_mat(sim_mat, cosine_sim_age_mat_file)
+
+
+def create_cosine_sex_age_similarites(mat, users, sexDiff = 0.05):
+    sim_mat = np.ones((mat.shape[0], mat.shape[0]))
+    mat = mat.values
+    users = users.values
+
+    for i, row in enumerate(mat):
+       
+        ageA = users[i][2]
+        sexA = users[i][1]
+
+        for j in range(i + 1, len(mat)):
+            ageB = users[j][2]
+            sexB = users[j][1]
+
+            ageFactor = 1
+            diff = np.absolute(ageA - ageB)
+            if ageA != 1 and ageB != 1 and diff != 0:
+                ageFactor = np.log10(diff + 1)
+
+            sexFactor = 1
+            if sexA != sexB:
+                sexFactor += sexDiff
+            else:
+                sexFactor -= sexDiff
+
+            sim = cosineSim(mat[i], mat[j]) / (ageFactor * sexFactor)
+            if sim > 1:
+                sim = 1
+            if sim < -1:
+                sim = -1
+
+            sim_mat[i][j] = sim 
+            sim_mat[j][i] = sim
+
+    write_mat(sim_mat, cosine_sim_sex_age_mat_file)
+
+
+def create_pearson_sex_age_similarites(mat, users, sexDiff = 0.05):
+    sim_mat = np.ones((mat.shape[0], mat.shape[0]))
+    mat = mat.values
+    users = users.values
+
+    for i, row in enumerate(mat):
+       
+        sdA = np.std(mat[i])
+        ageA = users[i][2]
+        sexA = users[i][1]
+
+        for j in range(i + 1, len(mat)):
+            sdB = np.std(mat[j])
+            ageB = users[j][2]
+            sexB = users[j][1]
+
+            ageFactor = 1
+            diff = np.absolute(ageA - ageB)
+            if ageA != 1 and ageB != 1 and diff != 0:
+                ageFactor = np.log10(diff + 1)
+            
+            sexFactor = 1
+            if sexA != sexB:
+                sexFactor -= sexDiff
+            else:
+                sexFactor += sexDiff
+
+            sim = 0
+            if sdA != 0 and sdB != 0:
+                dot = np.dot(mat[i], mat[j]) / 6040
+                sim = dot / (sdA * sdB * ageFactor * sexFactor)
+
+            
+            sim_mat[i][j] = sim 
+            sim_mat[j][i] = sim
+
+    write_mat(sim_mat, pearson_sim_sex_age_mat_file)
+
+# create_cosine_age_similarites(centered_user_mat_description, users_description)
+# create_cosine_sex_age_similarites(centered_user_mat_description, users_description)
+# create_pearson_age_similarites(centered_user_mat_description, users_description)
+# create_pearson_sex_age_similarites(centered_user_mat_description, users_description)
+# create_pearson_sex_age_similarites(center)
+# create_similarities(centered_mat_description)
+# print("creating age neighbourhood")
+# create_neighbourhood(pearson_age_mat_description, 0.0, cosine_age_neighbourhood_file)
+# print("done")
+
+# print("creating age neighbourhood")
+# create_neighbourhood(pearson_age_mat_description, 0.0, cosine_sex_age_neighbourhood_file)
 # print("done")
 
 def check_similarities(neighbours, movieIndex, similarites):
@@ -182,7 +436,6 @@ def predict_with_neighbours(user, movie, neighbours, ratings, similarities):
 
     similarities = similarities.values
     ratings = ratings.values
-
     totalSim = 0
     for neighbour in neighbours[movie - 1]:
         neighbour = int(neighbour) - 1
@@ -200,6 +453,38 @@ def predict_with_neighbours(user, movie, neighbours, ratings, similarities):
         if rating != 0:
             finalRating += rating * sim / totalSim
     
+    if finalRating < 0 or finalRating > 5.0:
+        return global_avg
+
+    return finalRating
+
+def predict_with_pearson_neighbours(user, movie, neighbours, ratings, similarities):
+
+
+    similarities = similarities.values
+    ratings = ratings.values
+    # neighbours = neighbours.values
+    
+    totalSim = 0
+    for neighbour in neighbours[user - 1]:
+        neighbour = int(neighbour) - 1
+        if ratings[neighbour][movie] != 0:
+            totalSim += similarities[user-1][neighbour]
+    
+    if totalSim == 0:
+        return global_avg
+
+    finalRating = 0
+    for neighbour in neighbours[user - 1]:
+        neighbour = int(neighbour) - 1
+        rating = ratings[neighbour][movie]
+        sim = similarities[user-1][neighbour]
+        if rating != 0:
+            finalRating += rating * sim / totalSim
+    
+    if finalRating < 0 or finalRating > 5.0:
+        return global_avg
+
     return finalRating
     
 
@@ -210,8 +495,55 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
     for i, prediction in enumerate(predictions):
         user = prediction[0]
         movie = prediction[1]
-        finalPredictions[i][0] = i + 1
+        finalPredictions[i][0] = int(i + 1)
         finalPredictions[i][1] = predict_with_neighbours(user - 1, movie - 1, neighbourhood_description, ratings, sim_mat_description)
+    
+    return finalPredictions
+
+def predict_pearson(movies, users, ratings, predictions):
+    # TO COMPLETE
+    predictions = predictions.values
+    finalPredictions = np.empty((len(predictions), 2))
+    for i, prediction in enumerate(predictions):
+        user = prediction[0]
+        movie = prediction[1]
+        finalPredictions[i][0] = int(i + 1)
+        finalPredictions[i][1] = predict_with_pearson_neighbours(user - 1, movie - 1, pearson_neighbourhood_description, ratings, pearson_age_sim_mat_description)
+    
+    return finalPredictions
+def predict_colab_age(movies, users, ratings, predictions):
+    # TO COMPLETE
+    predictions = predictions.values
+    finalPredictions = np.empty((len(predictions), 2))
+    for i, prediction in enumerate(predictions):
+        user = prediction[0]
+        movie = prediction[1]
+        finalPredictions[i][0] = int(i + 1)
+        finalPredictions[i][1] = predict_with_pearson_neighbours(user - 1, movie - 1, cosine_age_neighbourhood_description, ratings, cosine_age_sim_mat_description)
+    
+    return finalPredictions
+
+def predict_colab_sex_age(movies, users, ratings, predictions):
+    # TO COMPLETE
+    predictions = predictions.values
+    finalPredictions = np.empty((len(predictions), 2))
+    for i, prediction in enumerate(predictions):
+        user = prediction[0]
+        movie = prediction[1]
+        finalPredictions[i][0] = int(i + 1)
+        finalPredictions[i][1] = predict_with_pearson_neighbours(user - 1, movie - 1, cosine_sex_age_neighbourhood_description, ratings, cosine_sex_age_sim_mat_description)
+    
+    return finalPredictions
+
+def predict_sex_age_pearson(movies, users, ratings, predictions):
+    # TO COMPLETE
+    predictions = predictions.values
+    finalPredictions = np.empty((len(predictions), 2))
+    for i, prediction in enumerate(predictions):
+        user = prediction[0]
+        movie = prediction[1]
+        finalPredictions[i][0] = int(i + 1)
+        finalPredictions[i][1] = predict_with_pearson_neighbours(user - 1, movie - 1, pearson_sex_age_neighbourhood_description, ratings, pearson_sex_age_sim_mat_description)
     
     return finalPredictions
 
@@ -233,12 +565,31 @@ def apply_predictions(ratings, predictions, actual_predictions):
                 
     return new_ratings
 
+# print(neighbourhood_description.shape)
+# print("predicting.....")
+# print(neighbourhood_description[0])
+# print(cosine_age_neighbourhood_description[0])
+# print(neighbourhood_description.shape)
+# print(cosine_age_neighbourhood_description.shape)
+# colab_age_predictions = predict_colab_age(movies_description, users_description, ratings_mat_description, predictions_description)
+# write_predictions(colab_age_predictions, cosine_age_predictions_file)
+# print("Half way there....")
+# colab_sex_age_predictions = predict_colab_sex_age(movies_description, users_description, ratings_mat_description, predictions_description)
+# write_predictions(colab_sex_age_predictions, cosine_sex_age_predictions_file)
+# print("done!")
+# print(pearson_age_sim_mat_description.values.shape)
+# pearson_age_predictions = predict_pearson(movies_description, users_description, ratings_mat_description, predictions_description)
+# write_predictions(pearson_age_predictions, pearson_age_predictions_file)
+
+# pearson_sex_age_predictions = predict_sex_age_pearson(movies_description, users_description, ratings_mat_description, predictions_description)
 # predictions = predict_collaborative_filtering(movies_description, users_description, ratings_mat_description, predictions_description)
 # write_predictions(predictions, collab_predictions_file)
 
-# ratings = ratings_mat_description.values
+ratings = ratings_mat_description.values
 # print(ratings[:0].sum())
 # print(collab_predictions_description.values[1][1])
+colab_age_ratings = apply_predictions(ratings, predictions_description, cosine_age_predictions_description)
+colab_sex_age_ratings = apply_predictions(ratings, predictions_description, cosine_sex_age_predictions_description)
 # newRatings = apply_predictions(ratings, predictions_description, collab_predictions_description)
 # write_mat(newRatings, collab_ratings_file)
 
@@ -392,7 +743,12 @@ def predict_with_factorize(ratings, numFeatures, predictions):
     return Submission
     
 
-prediction = predict_with_factorize(collab_ratings_description.values, 1000, predictions_description.values)
+# prediction = predict_with_factorize(collab_ratings_description.values, 1000, predictions_description.values)
+colab_age_factorize_predictions = predict_with_factorize(colab_age_ratings, 15, predictions_description.values)
+write_predictions(colab_age_factorize_predictions, './data/colab_age_factorize_predictions.csv')
+
+colab_sex_age_factorize_predictions = predict_with_factorize(colab_sex_age_ratings, 15, predictions_description.values)
+write_predictions(colab_sex_age_factorize_predictions, './data/colab_sex_age_factorize_predictions.csv')
 
 
 def predict_final(movies, users, ratings, predictions):
@@ -435,4 +791,4 @@ def create_ratings_mat(movies, users, ratings):
 ##### 
 #Save predictions, should be in the form 'list of tuples' or 'list of lists'
 # predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
-write_predictions(predictions, './data/submission.csv')
+# write_predictions(predictions, './data/submission.csv')
